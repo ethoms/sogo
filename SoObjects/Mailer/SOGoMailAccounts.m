@@ -41,8 +41,6 @@
 
 #define XMLNS_INVERSEDAV @"urn:inverse:params:xml:ns:inverse-dav"
 
-// TODO: prune redundant methods
-
 @implementation SOGoMailAccounts
 
 - (NSArray *) mailAccounts
@@ -208,9 +206,6 @@
 </D:multistatus>
 
 */
-
-/* No longer in use, causes objc-method-access warning
-
 - (NSException *) setDavMailsLabels: (NSString *) newLabels
 {
   id <DOMElement> documentElement, labelNode;
@@ -258,6 +253,5 @@
 
   return nil;
 }
-*/
 
 @end /* SOGoMailAccounts */
