@@ -94,7 +94,6 @@
                       <var:string label:value="Sharing..."/>
                     </md-button>
                   </md-menu-item>
-                  <md-menu-divider><!-- divider --></md-menu-divider>
                   <md-menu-item>
                     <md-button type="button" ng-click="app.showProperties(folder)">
                       <var:string label:value="Properties"/>
@@ -282,8 +281,8 @@
                        label:aria-label="Back">
               <md-icon>arrow_back</md-icon>
             </md-button>
-            <md-input-container>
-              <input name="folderSearch" type="search" ng-minlength="3"/>
+            <md-input-container md-no-float="md-no-float">
+              <input name="folderSearch" type="search" label:placeholder="Search" ng-minlength="3"/>
             </md-input-container>
             <md-input-container flex="25">
               <md-select>
@@ -320,7 +319,7 @@
               </md-button>
               <md-menu-content width="4">
                 <md-menu-item>
-                  <md-button class="md-primary" ng-disabled="true"><var:string label:value="Address Books"/></md-button>
+                  <md-button class="md-primary" ng-disabled="true"><var:string label:value="Copy To"/></md-button>
                 </md-menu-item>
                 <md-menu-divider><!-- divider --></md-menu-divider>
                 <md-menu-item ng-repeat="folder in app.service.$addressbooks track by folder.id"
@@ -427,10 +426,9 @@
            ng-class="{ 'sg-close': !addressbook.selectedFolder.selectedCard }"
            ui-view="card">
         <md-toolbar class="md-whiteframe-z1 hide-sm"><!-- empty toolbar --></md-toolbar>
-        <md-content class="hide-sm md-flex layout-fill md-hue-1" layout="column">
-          <md-input-container layout-align="center center">
-            <label class="sg-md-title"><var:string label:value="No contact selected"/></label>
-          </md-input-container>
+        <md-content class="hide-sm md-flex layout-fill md-hue-1"
+                    layout="column" layout-align="center center">
+          <div class="md-default-theme md-background md-fg md-hue-3 sg-md-title"><var:string label:value="No contact selected"/></div>
         </md-content>
       </div>
     </div>
@@ -439,6 +437,40 @@
   <!-- modal for addressbook sharing options -->
   <script type="text/ng-template" id="UIxUserRightsEditor">
     <var:component className="UIxContactsUserRightsEditor" />
+  </script>
+
+  <!-- modal for cards import -->
+  <script type="text/ng-template" id="UIxContactsImportDialog">
+    <md-dialog flex="40" flex-sm="100" label:aria-label="Import Cards">
+      <md-toolbar>
+        <div class="md-toolbar-tools">
+          <md-icon class="material-icons sg-icon-toolbar-bg">import_export</md-icon>
+          <div class="md-flex">
+            <div class="sg-md-title"><var:string label:value="Import Cards"/></div>
+          </div>
+          <md-button class="md-icon-button" ng-click="$CardsImportDialogController.close()">
+            <md-icon aria-label="Close dialog">close</md-icon>
+          </md-button>
+        </div>
+      </md-toolbar>
+      <md-dialog-content class="md-dialog-content">
+        <p><var:string label:value="Select a vCard or LDIF file."/></p>
+      </md-dialog-content>
+      <md-dialog-actions>
+        <md-progress-circular class="md-accent"
+                              md-mode="determinate"
+                              md-diameter="20px"
+                              ng-show="$CardsImportDialogController.uploader.isUploading"
+                              ng-value="$CardsImportDialogController.uploader.progress"><!-- progress --></md-progress-circular>
+        <label class="md-button" for="file-input" ng-hide="$CardsImportDialogController.uploader.isUploading">
+          <span><var:string label:value="Upload"/></span>
+        </label>
+        <input id="file-input" type="file" class="ng-hide"
+               nv-file-select="nv-file-select"
+               uploader="$CardsImportDialogController.uploader"/>
+        <!-- <md-button ng-disabled="uploader.queue.length == 0" ng-click="upload()"><var:string label:value="Upload"/></md-button> -->
+      </md-dialog-actions>
+    </md-dialog>
   </script>
 
   <script type="text/ng-template" id="UIxContactViewTemplate">

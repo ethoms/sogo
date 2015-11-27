@@ -46,7 +46,8 @@
       $queryEvents: { sort: 'start', asc: 1, filterpopup: 'view_next7' },
       // Filter parameters specific to tasks
       $queryTasks: { sort: 'status', asc: 1, filterpopup: 'view_incomplete' },
-      $refreshTimeout: null
+      $refreshTimeout: null,
+      $ghost: {}
     });
     Preferences.ready().then(function() {
       // Initialize filter parameters from user's settings
@@ -98,10 +99,10 @@
 
     count = 0;
     if (Component.$events) {
-      count = (_.filter(Component.$events, function(event) { return event.selected; })).length;
+      count += (_.filter(Component.$events, function(event) { return event.selected; })).length;
     }
     if (Component.$tasks) {
-      count = (_.filter(Component.$tasks, function(task) { return task.selected; })).length;
+      count += (_.filter(Component.$tasks, function(task) { return task.selected; })).length;
     }
     return count;
   };
@@ -274,7 +275,7 @@
    * @returns a promise of a collection of objects describing the events blocks
    */
   Component.$eventsBlocks = function(view, startDate, endDate) {
-    var params, futureComponentData, i, dates = [],
+    var params, futureComponentData, i, j, dates = [],
         deferred = Component.$q.defer();
 
     params = { view: view.toLowerCase(), sd: startDate.getDayString(), ed: endDate.getDayString() };
@@ -287,18 +288,26 @@
         var componentData = _.object(this.eventsFields, eventData),
             start = new Date(componentData.c_startdate * 1000);
         componentData.hour = start.getHourString();
+        componentData.blocks = [];
         objects.push(new Component(componentData));
         return objects;
       };
 
       associateComponent = function(block) {
-        block.component = this[block.nbr];
+        this[block.nbr].blocks.push(block); // Associate block to component
+        block.component = this[block.nbr];  // Associate component to block
       };
 
       Component.$views = [];
       Component.$timeout(function() {
         _.forEach(views, function(data) {
           var components = [], blocks = {}, allDayBlocks = {}, viewData;
+
+          // Change some attributes names
+          data.eventsFields.splice(_.indexOf(data.eventsFields, 'c_folder'),        1, 'pid');
+          data.eventsFields.splice(_.indexOf(data.eventsFields, 'c_name'),          1, 'id');
+          data.eventsFields.splice(_.indexOf(data.eventsFields, 'c_recurrence_id'), 1, 'occurrenceId');
+          data.eventsFields.splice(_.indexOf(data.eventsFields, 'c_title'),         1, 'summary');
 
           // Instantiate Component objects
           _.reduce(data.events, reduceComponent, components, data);
@@ -318,13 +327,31 @@
 
           // Convert array of blocks to object with days as keys
           for (i = 0; i < data.blocks.length; i++) {
+            for (j = 0; j < data.blocks[i].length; j++)
+              data.blocks[i][j].dayNumber = i;
             blocks[dates[i]] = data.blocks[i];
           }
 
           // Convert array of all-day blocks to object with days as keys
           for (i = 0; i < data.allDayBlocks.length; i++) {
+            for (j = 0; j < data.allDayBlocks[i].length; j++)
+              data.allDayBlocks[i][j].dayNumber = i;
             allDayBlocks[dates[i]] = data.allDayBlocks[i];
           }
+
+          // "blocks" is now an object literal with the following structure:
+          // { day: [
+          //    { start: number,
+          //      length: number,
+          //      siblings: number,
+          //      realSiblings: number,
+          //      position: number,
+          //      nbr: number,
+          //      component: Component },
+          //    .. ],
+          //  .. }
+          //
+          // Where day is a string with format YYYYMMDD
 
           Component.$log.debug('blocks ready (' + _.flatten(data.blocks).length + ')');
           Component.$log.debug('all day blocks ready (' + _.flatten(data.allDayBlocks).length + ')');
@@ -360,6 +387,9 @@
     return futureComponentData.then(function(data) {
       return Component.$timeout(function() {
         var fields = _.invoke(data.fields, 'toLowerCase');
+          fields.splice(_.indexOf(fields, 'c_folder'), 1, 'pid');
+          fields.splice(_.indexOf(fields, 'c_name'), 1, 'id');
+          fields.splice(_.indexOf(fields, 'c_recurrence_id'), 1, 'occurrenceId');
 
         // Instanciate Component objects
         _.reduce(data[type], function(components, componentData, i) {
@@ -431,6 +461,9 @@
     if (this.dueDate)
       this.due = new Date(this.dueDate.substring(0,10) + ' ' + this.dueDate.substring(11,16));
 
+    if (this.c_category)
+      this.categories = _.invoke(this.c_category, 'asCSSIdentifier');
+
     // Parse recurrence rule definition and initialize default values
     this.$isRecurrent = angular.isDefined(data.repeat);
     if (this.repeat.days) {
@@ -492,19 +525,12 @@
     // Allow the component to be moved to a different calendar
     this.destinationCalendar = this.pid;
 
-    if (this.organizer && this.organizer.email) {
-      this.organizer.$image = Component.$gravatar(this.organizer.email, 32);
-    }
+    // if (this.organizer && this.organizer.email) {
+    //   this.organizer.$image = Component.$gravatar(this.organizer.email, 32);
+    // }
 
     // Load freebusy of attendees
-    this.freebusy = this.updateFreeBusyCoverage();
-
-    if (this.attendees) {
-      _.each(this.attendees, function(attendee) {
-        attendee.image = Component.$gravatar(attendee.email, 32);
-        _this.updateFreeBusy(attendee);
-      });
-    }
+    this.updateFreeBusy();
 
     this.selected = false;
   };
@@ -582,7 +608,7 @@
    * @returns true if the percent completion should be displayed
    */
   Component.prototype.enablePercentComplete = function() {
-    return (this.component = 'vtodo' &&
+    return (this.type == 'task' &&
             this.status != 'not-specified' &&
             this.status != 'cancelled');
   };
@@ -648,6 +674,24 @@
   };
 
   /**
+   * @function updateFreeBusy
+   * @memberof Component.prototype
+   * @desc Update the freebusy coverage representation and the attendees freebusy information
+   */
+  Component.prototype.updateFreeBusy = function() {
+    var _this = this;
+
+    this.freebusy = this.updateFreeBusyCoverage();
+
+    if (this.attendees) {
+      _.each(this.attendees, function(attendee) {
+        attendee.image = Component.$gravatar(attendee.email, 32);
+        _this.updateFreeBusyAttendee(attendee);
+      });
+    }
+  };
+
+  /**
    * @function setDelta
    * @memberof Component.prototype
    * @desc Set the end time to the specified number of minutes after the start time.
@@ -661,12 +705,12 @@
   };
 
   /**
-   * @function updateFreeBusy
+   * @function updateFreeBusyAttendee
    * @memberof Component.prototype
    * @desc Update the freebusy information for the component's period for a specific attendee.
    * @param {Object} card - an Card object instance of the attendee
    */
-  Component.prototype.updateFreeBusy = function(attendee) {
+  Component.prototype.updateFreeBusyAttendee = function(attendee) {
     var params, url, days;
     if (attendee.uid) {
       params =
@@ -718,7 +762,7 @@
   Component.prototype.getClassName = function(base) {
     if (angular.isUndefined(base))
       base = 'fg';
-    return base + '-folder' + (this.destinationCalendar || this.c_folder);
+    return base + '-folder' + (this.destinationCalendar || this.c_folder || this.pid);
   };
 
   /**
@@ -745,7 +789,7 @@
           this.attendees.push(attendee);
         else
           this.attendees = [attendee];
-        this.updateFreeBusy(attendee);
+        this.updateFreeBusyAttendee(attendee);
       }
     }
   };
@@ -884,7 +928,7 @@
   };
 
   /**
-   * @function reply
+   * @function $reply
    * @memberof Component.prototype
    * @desc Reply to an invitation.
    * @returns a promise of the HTTP operation
@@ -907,6 +951,27 @@
         _this.$shadowData = _this.$omit(true);
         return data;
       });
+  };
+
+  /**
+   * @function $adjust
+   * @memberof Component.prototype
+   * @desc Adjust the start, day, and/or duration of the component
+   * @returns a promise of the HTTP operation
+   */
+  Component.prototype.$adjust = function(params) {
+    var path = [this.pid, this.id];
+
+    if (_.every(_.values(params), function(v) { return v === 0; }))
+      // No changes
+      return Component.$q.when();
+
+    if (this.occurrenceId)
+      path.push(this.occurrenceId);
+
+    Component.$log.debug('adjust ' + path.join('/') + ' ' + JSON.stringify(params));
+
+    return Component.$$resource.save(path.join('/'), params, { action: 'adjust' });
   };
 
   /**
@@ -979,7 +1044,9 @@
   Component.prototype.$omit = function() {
     var component = {}, date;
     angular.forEach(this, function(value, key) {
-      if (key != 'constructor' && key[0] != '$') {
+      if (key != 'constructor' &&
+          key[0] != '$' &&
+          key != 'blocks') {
         component[key] = angular.copy(value);
       }
     });
@@ -1060,5 +1127,45 @@
 
     return component;
   };
+
+  /**
+   * @function repeatDescription
+   * @memberof Component.prototype
+   * @desc Return a localized description of the recurrence definition
+   * @return a localized string
+   */
+  Component.prototype.repeatDescription = function() {
+    var localizedString = null;
+    if (this.repeat)
+      localizedString = l('repeat_' + this.repeat.frequency.toUpperCase());
+
+    return localizedString;
+  };
+
+  /**
+   * @function alarmDescription
+   * @memberof Component.prototype
+   * @desc Return a localized description of the reminder definition
+   * @return a localized string
+   */
+  Component.prototype.alarmDescription = function() {
+    var key, localizedString = null;
+    if (this.alarm) {
+      key = ['reminder' + this.alarm.quantity, this.alarm.unit, this.alarm.reference].join('_');
+      localizedString = l(key);
+      if (key === localizedString)
+        // No localized string for this reminder definition
+        localizedString = [this.alarm.quantity,
+                           l('reminder_' + this.alarm.unit),
+                           l('reminder_' + this.alarm.reference)].join(' ');
+    }
+
+    return localizedString;
+  };
+
+  Component.prototype.toString = function() {
+    return '[Component ' + this.id + ']';
+  };
+
 
 })();

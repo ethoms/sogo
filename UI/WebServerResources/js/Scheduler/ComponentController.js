@@ -23,7 +23,7 @@
 
     // Load all attributes of component
     if (angular.isUndefined(vm.component.$futureComponentData)) {
-      component = Calendar.$get(vm.component.c_folder).$getComponent(vm.component.c_name, vm.component.c_recurrence_id);
+      component = Calendar.$get(vm.component.pid).$getComponent(vm.component.id, vm.component.occurrenceId);
       component.$futureComponentData.then(function() {
         vm.component = component;
         vm.organizer = [vm.component.organizer];
@@ -72,7 +72,7 @@
       var c = component || vm.component;
 
       c.$reply().then(function() {
-        $rootScope.$broadcast('calendars:list');
+        $rootScope.$emit('calendars:list');
         $mdDialog.hide();
         Alarm.getAlarms();
       });
@@ -94,14 +94,14 @@
 
     function deleteOccurrence() {
       vm.component.remove(true).then(function() {
-        $rootScope.$broadcast('calendars:list');
+        $rootScope.$emit('calendars:list');
         $mdDialog.hide();
       });
     }
 
     function deleteAllOccurrences() {
       vm.component.remove().then(function() {
-        $rootScope.$broadcast('calendars:list');
+        $rootScope.$emit('calendars:list');
         $mdDialog.hide();
       });
     }
@@ -162,9 +162,7 @@
     vm.cancel = cancel;
     vm.save = save;
     vm.attendeesEditor = {
-      // startDate: vm.component.startDate,
-      // endDate: vm.component.endDate,
-      // days: getDays(),
+      days: getDays(),
       hours: getHours()
     };
     vm.addStartDate = addStartDate;
@@ -222,7 +220,7 @@
       if (form.$valid) {
         vm.component.$save()
           .then(function(data) {
-            $rootScope.$broadcast('calendars:list');
+            $rootScope.$emit('calendars:list');
             $mdDialog.hide();
             Alarm.getAlarms();
           }, function(data, status) {
@@ -237,7 +235,7 @@
         // Cancelling the creation of a component
         vm.component = null;
       }
-      $mdDialog.hide();
+      $mdDialog.cancel();
     }
 
     function getDays() {
@@ -289,6 +287,7 @@
           oldEndDate = new Date(vm.component.end.getTime());
         }
       }
+      updateFreeBusy();
     }
 
     function updateEndTime() {
@@ -306,6 +305,7 @@
         vm.component.delta = delta;
         oldEndDate = new Date(vm.component.end.getTime());
       }
+      updateFreeBusy();
     }
 
     function updateDueTime() {
@@ -316,6 +316,11 @@
 
     function adjustDueTime() {
       oldDueDate = new Date(vm.component.due.getTime());
+    }
+
+    function updateFreeBusy() {
+      vm.attendeesEditor.days = getDays();
+      vm.component.updateFreeBusy();
     }
   }
 

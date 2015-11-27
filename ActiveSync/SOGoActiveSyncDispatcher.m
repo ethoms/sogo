@@ -849,8 +849,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                currentFolder = [[[[context activeUser] homeFolderInContext: context] lookupName: folderType inContext: context acquire: NO]
                                                             lookupName: [cKey substringFromIndex: [cKey rangeOfString: @"/"].location+1]  inContext: context acquire: NO];
 
+             // We skip personal GCS folders - we always want to synchronize these
+             if ([currentFolder isKindOfClass: [SOGoGCSFolder class]] &&
+                 [[currentFolder nameInContainer] isEqualToString: @"personal"])
+               continue;
+
              // Remove the folder from device if it doesn't exist, we don't want to sync it, or it doesn't have the proper permissions
-             // No need to check for personal folders here since they can't be deleted
              if (!currentFolder ||
                  ![currentFolder synchronize] ||
                  [sm validatePermission: SoPerm_DeleteObjects
@@ -2569,7 +2573,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   NSString *fullName, *email;
 
   const char *bytes;
-  int i, len;
+  int i, e, len;
   BOOL found_header;
   
   // We get the mail's data
@@ -2586,7 +2590,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   email = [identity objectForKey: @"email"];
 
   if ([fullName length])
-    new_from_header = [[NSString stringWithFormat: @"From: %@ <%@>\r\n", fullName, email] dataUsingEncoding:NSUTF8StringEncoding];
+    new_from_header = [[NSString stringWithFormat: @"From: %@ <%@>\r\n", [fullName asQPSubjectString: @"utf-8"], email] dataUsingEncoding:NSUTF8StringEncoding];
   else
     new_from_header = [[NSString stringWithFormat: @"From: %@\r\n", email] dataUsingEncoding:NSUTF8StringEncoding];
 
@@ -2618,6 +2622,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         {
           found_header = YES;
           i = i + 2; // \r\n
+          bytes = bytes + 2;
           break;
         }
 
@@ -2625,12 +2630,26 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       i++;
     }
 
+   // We search for the first \r\n AFTER the From: header to get the length of the string to replace.
+   e = i;
+   while (e < len)
+     {
+       if ((*bytes == '\r') && (*(bytes+1) == '\n'))
+         {
+           e = e + 2;
+           break;
+         }
+
+       bytes++;
+       e++;
+     }
+
   // Update/Add the From header in the MIMEBody of the SendMail request.
   // Any other way to modify the mail body would break s/mime emails.
   if (found_header)
     {
       // Change the From header
-      [data replaceBytesInRange: NSMakeRange(i, [[message headerForKey: @"from"] length]+8) // start of the From header found - length of the parsed from-header-value + 8 (From:+\r\n+1)
+      [data replaceBytesInRange: NSMakeRange(i, (NSUInteger)(e-i))
                       withBytes: [new_from_header bytes]
                          length: [new_from_header length]];
     }
@@ -3145,9 +3164,18 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #else
           value = [[NSDate date] descriptionWithCalendarFormat: @"%a, %d %b %Y %H:%M:%S %z"
                                                       timeZone: [NSTimeZone timeZoneWithName: @"GMT"]
-                                                        locale: [[[NSLocale alloc] initWithLocaleIdentifier: @"en_US"] autorelease]];
+                                                        locale: [NSDictionary dictionaryWithObjectsAndKeys:
+                                                                     [NSArray arrayWithObjects: @"Jan", @"Feb", @"Mar", @"Apr",
+                                                                                                @"May", @"Jun", @"Jul", @"Aug", 
+                                                                                                @"Sep", @"Oct", @"Nov", @"Dec", nil],
+                                                                     @"NSShortMonthNameArray",
+                                                                     [NSArray arrayWithObjects: @"Sun", @"Mon", @"Tue", @"Wed", @"Thu",
+                                                                                                @"Fri", @"Sat", nil],
+                                                                     @"NSShortWeekDayNameArray",
+                                                                     nil]];
+
 #endif
-          s = [NSString stringWithFormat: @"Date: %@\n%@", value, [theRequest contentAsString]];
+          s = [NSString stringWithFormat: @"Date: %@\r\n%@", value, [theRequest contentAsString]];
         } 
       else
         {

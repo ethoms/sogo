@@ -14,7 +14,7 @@
     if (this.name && !this.id) {
       // Create a new calendar on the server
       var newCalendarData = Calendar.$$resource.create('createFolder', this.name);
-      angular.extend(this, newCalendarData);
+      this.$unwrap(newCalendarData);
     }
     if (this.id) {
       this.$acl = new Calendar.$$Acl('Calendar/' + this.id);
@@ -34,7 +34,8 @@
       $$resource: new Resource(Settings.activeUser('folderURL') + 'Calendar', Settings.activeUser()),
       $Component: Component,
       $$Acl: Acl,
-      activeUser: Settings.activeUser()
+      activeUser: Settings.activeUser(),
+      $view: null
     });
 
     return Calendar; // return constructor
@@ -51,6 +52,10 @@
     angular.module('SOGo.SchedulerUI', ['SOGo.Common']);
   }
   angular.module('SOGo.SchedulerUI')
+    .value('CalendarSettings', {
+      EventDragDayLength: 24 * 4,
+      EventDragHorizontalOffset: 3
+    })
     .factory('Calendar', Calendar.$factory);
 
   /**
@@ -234,6 +239,7 @@
    * @param {object} data - attributes of calendar
    */
   Calendar.prototype.init = function(data) {
+    this.color = this.color || '#AAAAAA';
     angular.extend(this, data);
     // Add 'isOwned' and 'isSubscription' attributes based on active user (TODO: add it server-side?)
     this.isOwned = Calendar.activeUser.isSuperUser || this.owner == Calendar.activeUser.login;
@@ -241,6 +247,25 @@
     if (angular.isUndefined(this.$shadowData)) {
       // Make a copy of the data for an eventual reset
       this.$shadowData = this.$omit();
+    }
+  };
+
+  /**
+   * @function $id
+   * @memberof Calendar.prototype
+   * @desc Resolve the calendar id.
+   * @returns a promise of the calendar id
+   */
+  Calendar.prototype.$id = function() {
+    if (this.id) {
+      // Object already unwrapped
+      return Calendar.$q.when(this.id);
+    }
+    else {
+      // Wait until object is unwrapped
+      return this.$futureCalendarData.then(function(calendar) {
+        return calendar.id;
+      });
     }
   };
 
@@ -376,6 +401,32 @@
    */
   Calendar.prototype.$getComponent = function(componentId, recurrenceId) {
     return Calendar.$Component.$find(this.id, componentId, recurrenceId);
+  };
+
+  /**
+   * @function $unwrap
+   * @memberof Calendar.prototype
+   * @desc Unwrap a promise
+   * @param {promise} futureCalendarData - a promise of the Calendar's data
+   */
+  Calendar.prototype.$unwrap = function(futureCalendarData) {
+    var _this = this;
+
+    // Expose and resolve the promise
+    this.$futureCalendarData = futureCalendarData.then(function(data) {
+      return Calendar.$timeout(function() {
+        // Extend Calendar instance with received data
+        _this.init(data);
+        return _this;
+      });
+    }, function(data) {
+      _this.isError = true;
+      if (angular.isObject(data)) {
+        Calendar.$timeout(function() {
+          angular.extend(_this, data);
+        });
+      }
+    });
   };
 
   /**

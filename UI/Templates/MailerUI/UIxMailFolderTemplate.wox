@@ -123,8 +123,8 @@
                    label:aria-label="Back">
           <md-icon>arrow_back</md-icon>
         </md-button>
-        <md-input-container>
-          <input name="folderSearch" type="search" ng-minlength="3"/>
+        <md-input-container md-no-float="md-no-float">
+          <input name="folderSearch" type="search" ng-minlength="3" label:placeholder="Search"/>
         </md-input-container>
         <md-input-container flex="25">
           <md-select>
@@ -229,8 +229,10 @@
                 <div>
                   <span class="sg-label-outline"
                            ng-show="mailbox.service.$virtualMode">{{currentMessage.$mailbox.name}}</span>
+                  <md-icon ng-show="currentMessage.priority.level == 1 ||
+                                    currentMessage.priority.level == 2"
+                           ng-class="{'md-warn': currentMessage.priority.level == 1}">error</md-icon>
                   {{currentMessage.$shortAddress('from')}}
-                  <md-icon ng-show="currentMessage.priority.level == 1 || currentMessage.priority.level == 2">warning</md-icon>
                 </div>
                 <div class="sg-tile-date" ng-bind="currentMessage.relativedate"><!-- date --></div>
               </div>
@@ -261,14 +263,14 @@
     </md-content>
   </div>
 
-  <div id="detailView" class="view-detail" layout="column" layout-align="start center"
+  <div id="detailView" class="view-detail md-default-theme md-background md-bg md-hue-1"
+       layout="column" layout-align="start center"
        ng-class="{ 'sg-close': !mailbox.service.selectedFolder.selectedMessage }"
        ui-view="message">
     <md-toolbar class="md-whiteframe-z1 hide-sm"><!-- empty toolbar --></md-toolbar>
-    <md-content class="hide-sm md-flex layout-fill md-hue-1" layout="column">
-      <md-input-container layout-align="center center">
-        <label class="sg-md-title"><var:string label:value="No message selected"/></label>
-      </md-input-container>
+    <md-content class="hide-sm md-flex layout-fill md-hue-1"
+                layout="column" layout-align="center center">
+      <div class="md-default-theme md-background md-fg md-hue-3 sg-md-title"><var:string label:value="No message selected"/></div>
     </md-content>
   </div>
 

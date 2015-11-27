@@ -21,11 +21,18 @@ $sg-color-chip-width: $subhead-font-size-base;
 md-list-item {
   .md-list-item-inner {
     flex-grow: 1; // use all column space
+    overflow: hidden;
+
+    // Gain some space since we want small list items
+    & > md-checkbox {
+      margin-top: 0px;
+    }
   }
   md-icon,
   .md-button md-icon {
     margin-left: 0;
   }
+
   .sg-item-name {
     font-size: sg-size(button);
     max-width: 75%; // leave some place for a secondary button
@@ -43,6 +50,7 @@ md-list-item {
 .md-sidenav-left {
   // Remove padding of input fields in the sidenav for better transitions between read and edit mode of a folder
   md-input-container {
+    margin: 0;
     padding: 0;
     .md-input {
       padding-left: 0;
@@ -51,6 +59,7 @@ md-list-item {
 
   md-list-item {
     .md-button {
+      margin: 0;
       transition: background-color $swift-ease-in-duration $swift-ease-in-timing-function;
     }
     // Gain some space on the right side of the folder icon
@@ -177,7 +186,7 @@ div.md-tile-left {
   &-tile-icons {
     md-icon {
       font-size: $sg-font-size-1;
-      color: $colorGray;
+      //color: $colorGray;
       margin: 1px 2px;
     }
   }
